@@ -1,9 +1,10 @@
-import React from "react";
+import React, { useState } from "react";
 import ReactECharts from "echarts-for-react";
 import { updateChartProps } from "../functions/utils";
 
 const Chart = (props) => {
   const { chartData: renderData, setChartData, setHighlightRow } = props;
+  const [dblClickIndex, setDblClickIndex] = useState(undefined);
 
   const symbolSize = 20;
 
@@ -104,8 +105,24 @@ const Chart = (props) => {
           },
           invisible: true,
           draggable: true,
+          ondragend: function (dx, dy) {
+            if (
+              dblClickIndex !== undefined &&
+              dblClickIndex === seriesIndex &&
+              oneLineData.length <= 2
+            )
+              onPointDraggingPushDataPoint(seriesIndex, dataIndex, [
+                this.x,
+                this.y,
+              ]);
+          },
           ondrag: function (dx, dy) {
-            onPointDragging(seriesIndex, dataIndex, [this.x, this.y]);
+            if (dblClickIndex === undefined || dblClickIndex !== seriesIndex)
+              onPointDragging(seriesIndex, dataIndex, [this.x, this.y]);
+          },
+          ondblclick: (props) => {
+            if (oneLineData.length <= 2) setDblClickIndex(seriesIndex);
+            else setDblClickIndex(undefined);
           },
           onclick: function (props) {
             setHighlightRow(seriesIndex);
@@ -125,7 +142,6 @@ const Chart = (props) => {
   };
 
   setTimeout(function () {
-    // Add shadow circles (which is not visible) to enable drag.
     eChartsRef.current?.getEchartsInstance().setOption({
       graphic: setGraphicProperty(),
     });
@@ -177,14 +193,38 @@ const Chart = (props) => {
     data[seriesIndex]["data"][dataIndex] = eChartsRef.current
       ?.getEchartsInstance()
       .convertFromPixel("grid", pos);
-
     setChartData([...data]);
 
-    // Update data
     eChartsRef.current?.getEchartsInstance().setOption({
       series: chartData,
     });
   }
+
+  function onPointDraggingPushDataPoint(seriesIndex, dataIndex, pos) {
+    setDblClickIndex(undefined);
+    let data = chartData;
+    data[seriesIndex]["data"].push(
+      eChartsRef.current?.getEchartsInstance().convertFromPixel("grid", pos)
+    );
+
+    setChartData([...data]);
+  }
+
+  eChartsRef.current
+    ?.getEchartsInstance()
+    .getZr()
+    .on("dblclick", function (params) {
+      if (params.target === undefined) {
+        setDblClickIndex(undefined);
+        const dataPoints = eChartsRef.current
+          ?.getEchartsInstance()
+          .convertFromPixel("grid", [params.offsetX, params.offsetY]);
+        setChartData([
+          ...renderData,
+          { name: "Buy-$60", data: [[...dataPoints]] },
+        ]);
+      }
+    });
 
   return (
     <ReactECharts option={option} ref={eChartsRef} style={{ height: 800 }} />
